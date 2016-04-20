@@ -133,7 +133,39 @@ class Avp:
         if len(str_cnr) != cnr.bias*2:
             error_exit("str_cnr length is %x, but cnr need %x"%(len(str_cnr)/2,cnr.bias))
             
+        for key in cnr.major_dump:
+            start = (cnr.bias - key[1]["offset"] - key[1]["size"])*2
+            end = start + key[1]["size"]*2
+            key[1]["value"] = str_cnr[start:end]
+            for i in chx.major_dump:
+                if eq(i[0],key[0]):
+                    is_in_chx = 1
+                    i[1]["is_in_cnr"] = 1
+                    if(i[1]["size"] == key[1]["size"]):
+                        i[1]["value"] = key[1]["value"] 
+                    elif(i[1]["size"] > key[1]["size"]):
+                        i[1]["value"] = "F4"*(i[1]["size"] - key[1]["size"]) + key[1]["value"]
+                        debug("signal: %s data size in cnr %x is fewer than in chx %x, change value from %s to %s"\
+                                %(key[0],key[1]["size"],i[1]["size"],key[1]["value"],i[1]["value"]))
+                    else:
+                        debug("signal: %s data size in cnr %x is bigger than in chx %x"%(key[0],key[1]["size"],i[1]["size"]))
+                else:
+                    pass
+            if is_in_chx == 0:
+                debug("signal: %s in cnr is not in chx"%(key[0]))
+        chx.check_in_cnr()      
+        str_chx = ""
+        last_offset = chx.bias
+        for key in chx.major_dump:
+            empty_cnt = last_offset -(key[1]["offset"]+key[1]["size"])
+            str_chx = str_chx + "F4"*(empty_cnt)+ key[1]["value"]
+            last_offset = key[1]["offset"]
         
+        for i in range(0, len(str_chx),8):
+            chx_key = "00%X"%(addr+chx.bias-4-i/2)
+            dump_chx[chx_key] = str_chx[i:i+8]
+        #chx.check_major_dump()
+
     def Gen_avp(self):
         self.Update_mem_card(self.initial_addr,self.initial_dump_chx,self.initial_dump)
         self.Update_mem_card(self.results_addr,self.results_dump_chx,self.results_dump)

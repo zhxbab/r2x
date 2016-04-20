@@ -17,39 +17,78 @@ class Prolog:
         self.prolog = {}
         self.str = ""
     def gen(self,line):
+        offset =  0 
         for key in line:
             if eq(key, "section"):
                 continue
             else:
-                self.prolog[key] = {"value":"0","pos":0,"offset":int(line[key]["offset"],16),"size":int(line[key]["size"])}
-
+                self.prolog[key] = {"value":"0","position":0,"offset":int(line[key]["offset"],16),"size":line[key]["size"]}
+                offset = max(offset,int(line[key]["offset"],16))
         self.prolog = sorted(self.prolog.iteritems(), key=lambda x:x[1]["offset"])
+        self.offset = int((offset/8 + 1)*8) # 8 bytes aligned
+        #info("offset is %x and %x"%(offset,offset%8))
+        self.str = self.str + "\t\"%s\": {\"value\":\"%08x\",\"position\":0x0,\"offset\":0x0,\"size\":4},\\\n"%("prolog_data_size", self.offset)
+        self.str = self.str + "\t\"%s\": {\"value\":\"%s\",\"position\":0x0,\"offset\":0x4,\"size\":4},\\\n"%("prolog_type", self.prolog_type)
         for key in self.prolog:
             #info(key)
-            self.str = self.str + "\t\"%s\": {\"value\":\"%s\",\"pos\":0x%x,\"offset\":0x%x,\"size\":0x%x,\"},\\\n"%(key[0], key[1]["value"], \
-                                                                                                                   key[1]["pos"], key[1]["offset"], key[1]["size"])
+            self.str = self.str + "\t\"%s\": {\"value\":\"%s\",\"position\":0x%x,\"offset\":0x%x,\"size\":%x},\\\n"%(key[0], key[1]["value"], \
+                                                                                                                   key[1]["position"], key[1]["offset"]+8, key[1]["size"]) # +8, because tracer dump inclue prolog_data_size and prolog_type
         self.str = self.str + "}\n"
-        
 class Pram(Prolog):
     def __init__(self):
         Prolog.__init__(self)
         self.str = "PRAM_PROLOG = {\\\n"
+        self.prolog_type = "00000200"
+    def gen(self,line):
+        Prolog.gen(self,line)
+        self.str = self.str +  "PRAM_PROLOG_INFO = {\\\n"
+        self.str = self.str + "\t\"%s\":0x%x,\\\n"%("mask", 0x9)
+        self.str = self.str + "\t\"%s\":0x%x,\\\n"%("size", self.offset+8)
+        self.str = self.str + "}\n"
 class Ucpram(Prolog):
     def __init__(self):
         Prolog.__init__(self)
         self.str = "UCPRAM_PROLOG = {\\\n"
+        self.prolog_type = "000002000"
+    def gen(self,line):
+        Prolog.gen(self,line)
+        self.str = self.str +  "UCPRAM_PROLOG_INFO = {\\\n"
+        self.str = self.str + "\t\"%s\":0x%x,\\\n"%("mask", 0xe) # I don't know the mask
+        self.str = self.str + "\t\"%s\":0x%x,\\\n"%("size", self.offset+8)
+        self.str = self.str + "}\n"
 class Core(Prolog):
     def __init__(self):
         Prolog.__init__(self)
-        self.str = "Core_PROLOG = {\\\n"
+        self.str = "CORE_PROLOG = {\\\n"
+        self.prolog_type = "00000040"
+    def gen(self,line):
+        Prolog.gen(self,line)
+        self.str = self.str +  "CORE_PROLOG_INFO = {\\\n"
+        self.str = self.str + "\t\"%s\":0x%x,\\\n"%("mask", 0x6)
+        self.str = self.str + "\t\"%s\":0x%x,\\\n"%("size", self.offset+8)
+        self.str = self.str + "}\n"
 class Ucregs(Prolog):
     def __init__(self):
         Prolog.__init__(self)
         self.str = "UCREGS_PROLOG = {\\\n"
+        self.prolog_type = "00008000"
+    def gen(self,line):
+        Prolog.gen(self,line)
+        self.str = self.str +  "UCREGS_PROLOG_INFO = {\\\n"
+        self.str = self.str + "\t\"%s\":0x%x,\\\n"%("mask", 0xf)
+        self.str = self.str + "\t\"%s\":0x%x,\\\n"%("size", self.offset+8)
+        self.str = self.str + "}\n"
 class Uccoreregs(Prolog):
     def __init__(self):
         Prolog.__init__(self)  
         self.str = "UCCOREREGS_PROLOG = {\\\n"
+        self.prolog_type = "00001000"
+    def gen(self,line):
+        Prolog.gen(self,line)
+        self.str = self.str +  "UCCOREREGS_PROLOG_INFO = {\\\n"
+        self.str = self.str + "\t\"%s\":0x%x,\\\n"%("mask", 0xc)
+        self.str = self.str + "\t\"%s\":0x%x,\\\n"%("size", self.offset+8)
+        self.str = self.str + "}\n"
         
 class Tracer_def:
     def __init__(self,args):
