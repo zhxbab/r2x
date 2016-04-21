@@ -27,11 +27,11 @@ class Prolog:
         self.prolog = sorted(self.prolog.iteritems(), key=lambda x:x[1]["offset"])
         self.offset = int((offset/8 + 1)*8) # 8 bytes aligned
         #info("offset is %x and %x"%(offset,offset%8))
-        self.str = self.str + "\t\"%s\": {\"value\":\"%08x\",\"position\":0x0,\"offset\":0x0,\"size\":4},\\\n"%("prolog_data_size", self.offset)
-        self.str = self.str + "\t\"%s\": {\"value\":\"%s\",\"position\":0x0,\"offset\":0x4,\"size\":4},\\\n"%("prolog_type", self.prolog_type)
+        self.str = self.str + "\t\"%s_data_size\": {\"value\":\"%08x\",\"position\":0x0,\"offset\":0x0,\"size\":4,\"constant\":0x1},\\\n"%(self.prolog_name, self.offset)
+        self.str = self.str + "\t\"%s_type\": {\"value\":\"%s\",\"position\":0x0,\"offset\":0x4,\"size\":4,\"constant\":0x1},\\\n"%(self.prolog_name, self.prolog_type)
         for key in self.prolog:
             #info(key)
-            self.str = self.str + "\t\"%s\": {\"value\":\"%s\",\"position\":0x%x,\"offset\":0x%x,\"size\":%x},\\\n"%(key[0], key[1]["value"], \
+            self.str = self.str + "\t\"%s\": {\"value\":\"%s\",\"position\":0x%x,\"offset\":0x%x,\"size\":0x%x},\\\n"%(key[0], key[1]["value"], \
                                                                                                                    key[1]["position"], key[1]["offset"]+8, key[1]["size"]) # +8, because tracer dump inclue prolog_data_size and prolog_type
         self.str = self.str + "}\n"
 class Pram(Prolog):
@@ -39,6 +39,7 @@ class Pram(Prolog):
         Prolog.__init__(self)
         self.str = "PRAM_PROLOG = {\\\n"
         self.prolog_type = "00000200"
+        self.prolog_name = "pram_prolog"
     def gen(self,line):
         Prolog.gen(self,line)
         self.str = self.str +  "PRAM_PROLOG_INFO = {\\\n"
@@ -50,6 +51,7 @@ class Ucpram(Prolog):
         Prolog.__init__(self)
         self.str = "UCPRAM_PROLOG = {\\\n"
         self.prolog_type = "000002000"
+        self.prolog_name = "ucpram_prolog"
     def gen(self,line):
         Prolog.gen(self,line)
         self.str = self.str +  "UCPRAM_PROLOG_INFO = {\\\n"
@@ -61,6 +63,7 @@ class Core(Prolog):
         Prolog.__init__(self)
         self.str = "CORE_PROLOG = {\\\n"
         self.prolog_type = "00000040"
+        self.prolog_name = "core_prolog"
     def gen(self,line):
         Prolog.gen(self,line)
         self.str = self.str +  "CORE_PROLOG_INFO = {\\\n"
@@ -72,6 +75,7 @@ class Ucregs(Prolog):
         Prolog.__init__(self)
         self.str = "UCREGS_PROLOG = {\\\n"
         self.prolog_type = "00008000"
+        self.prolog_name = "ucregs_prolog"
     def gen(self,line):
         Prolog.gen(self,line)
         self.str = self.str +  "UCREGS_PROLOG_INFO = {\\\n"
@@ -83,6 +87,7 @@ class Uccoreregs(Prolog):
         Prolog.__init__(self)  
         self.str = "UCCOREREGS_PROLOG = {\\\n"
         self.prolog_type = "00001000"
+        self.prolog_name = "uccoreregs_prolog"
     def gen(self,line):
         Prolog.gen(self,line)
         self.str = self.str +  "UCCOREREGS_PROLOG_INFO = {\\\n"

@@ -8,7 +8,7 @@ from optparse import OptionParser
 import os, sys, logging, json, signal, re
 from operator import eq, ne
 from logging import info, error, debug, warning
-import gzip
+import gzip,random
 from chip import *
 ############################################Global Vars####################################
 def error_exit(cmd):
@@ -51,13 +51,14 @@ class Avp:
 
             self.initial_flag = 0
             self.results_flag = 0
+            self.program_flag = 0
             self.initial = {}
             self.results = {}
             self.initial_dump = {}
             self.results_dump = {}
             self.initial_dump_chx = {}
             self.results_dump_chx = {}
-            
+            self.tbdm = []
             self.chx_avp = open(self.chx_avp_file_name,"w")
             if not self.chx_avp:
                 error_exit("Open %s failed"%(self.chx_avp_file_name))
@@ -85,28 +86,37 @@ class Avp:
             line = self.cnr_avp.readline()
             if line:
                 line = line.strip()
+                m = re.search(r"//",line)
+                if m:
+
+                    if self.initial_flag == 0 and self.results_flag == 0 and self.program_flag == 0:
+                        self.tbdm.append(line)
+
                 m = re.search(r"initial {",line)
                 if m:
                     self.initial_flag = 1
                 m = re.search(r"program {",line)
                 if m:
+                    self.program_flag = 1
                     self.initial_flag = 0
                 m = re.search(r"results {",line)
                 if m:
+                    self.program_flag = 0
                     self.results_flag = 1
                     self.initial_flag = 0
                 #info(line)
-                m = re.search(r"memory\s*0x(\w+)\s*0x(\w+)",line)
+                m = re.search(r"mem[ory]{0,3}\s*0x(\w+)\s*0x(\w+)",line)
                 if m:
                     addr = m.group(1)
                     data = m.group(2)
-                #info(addr)
-                    if self.initial_flag == 1 and self.results_flag == 0:
-                        if(int(addr,16) <=(self.initial_addr + cnr.bias)) and (int(addr,16) >=(self.initial_addr)):
+                    #info(addr)
+                    if self.initial_flag == 1 and self.results_flag == 0 and self.program_flag == 0:
+                        if(int(addr,16) <(self.initial_addr + cnr.bias)) and (int(addr,16) >=(self.initial_addr)):
                             self.initial_dump[addr] = data
+                            #info(self.initial_dump[addr])
                         else:
                             self.initial[addr] = data
-                    elif self.initial_flag == 0 and self.results_flag == 1:
+                    elif self.initial_flag == 0 and self.results_flag == 1 and self.program_flag == 0:
                         if(int(addr,16) <=(self.results_addr + cnr.bias)) and (int(addr,16) >=(self.results_addr)):
                             self.results_dump[addr] = data
                         else:
@@ -128,7 +138,7 @@ class Avp:
                 debug("last addr is %x and current_addr is %x"%(last_addr,current_addr))
                 str_cnr = str_cnr + "F4"*(last_addr - current_addr - 0x4) + key[1]
             else:
-                error_exit("last_addr - current_addr < 0x4")
+                error_exit("last_addr is %x and current_addr is %x,so last_addr - current_addr < 0x4"%(last_addr,current_addr))
             last_addr = current_addr
         if len(str_cnr) != cnr.bias*2:
             error_exit("str_cnr length is %x, but cnr need %x"%(len(str_cnr)/2,cnr.bias))
@@ -141,14 +151,17 @@ class Avp:
                 if eq(i[0],key[0]):
                     is_in_chx = 1
                     i[1]["is_in_cnr"] = 1
-                    if(i[1]["size"] == key[1]["size"]):
-                        i[1]["value"] = key[1]["value"] 
-                    elif(i[1]["size"] > key[1]["size"]):
-                        i[1]["value"] = "F4"*(i[1]["size"] - key[1]["size"]) + key[1]["value"]
-                        debug("signal: %s data size in cnr %x is fewer than in chx %x, change value from %s to %s"\
+                    if not i[1].has_key("constant"):
+                        if(i[1]["size"] == key[1]["size"]):
+                            i[1]["value"] = key[1]["value"]
+                            #if eq(i[0],"xmm0"):
+                                #info(i[1]["value"])
+                        elif(i[1]["size"] > key[1]["size"]):
+                            i[1]["value"] = "F4"*(i[1]["size"] - key[1]["size"]) + key[1]["value"]
+                            debug("signal: %s data size in cnr %x is fewer than in chx %x, change value from %s to %s"\
                                 %(key[0],key[1]["size"],i[1]["size"],key[1]["value"],i[1]["value"]))
-                    else:
-                        debug("signal: %s data size in cnr %x is bigger than in chx %x"%(key[0],key[1]["size"],i[1]["size"]))
+                        else:
+                            debug("signal: %s data size in cnr %x is bigger than in chx %x"%(key[0],key[1]["size"],i[1]["size"]))
                 else:
                     pass
             if is_in_chx == 0:
@@ -167,6 +180,7 @@ class Avp:
         #chx.check_major_dump()
 
     def Gen_avp(self):
+        self.Gen_tbdm()
         self.Update_mem_card(self.initial_addr,self.initial_dump_chx,self.initial_dump)
         self.Update_mem_card(self.results_addr,self.results_dump_chx,self.results_dump)
         self.Gen_mem_card("initial")
@@ -186,13 +200,28 @@ class Avp:
         self.chx_avp.write("%s {\n"%(cmd))
         for key in sorted(mem_card.iteritems(),key=lambda x:x[0]):
             self.chx_avp.write("\tmemory\t0x%s\t0x%s\n"%(key[0],key[1]))
-        self.chx_avp.write("\\\\\tCHX new tracer dump data\n")
+        self.chx_avp.write("////\tCHX new tracer dump data\n")
         for key in sorted(mem_card_dump.iteritems(),key=lambda x:x[0]):
             self.chx_avp.write("\tmemory\t0x%s\t0x%s\n"%(key[0],key[1]))
         self.chx_avp.write("}\n")
         
-        
-        
+    def Gen_tbdm(self):
+        for key in self.tbdm:
+            m = re.search(r"//;\$  at TRACER_TR7 0x(\w+)  issue priority transaction 0x(\w+) 0x(\w+) 0x(\w+) 0x(\w+) 0x(\w+)",key)
+            if m:
+                info("change interrupt %s"%(key))
+                inter_tr7 = m.group(1)
+                inter_addr = m.group(2)
+                inter_len = 0
+                inter_be = 0x3
+                inter_id = random.randint(1,0xFF)
+                inter_data = m.group(6)
+                new_inter_cmd = "//;$  at TRACER_TR7 0x%s  issue P2CREQ apic 0x%s 0x%x 0x%x 0x%x 0x%s"\
+                %(inter_tr7,inter_addr,inter_be,inter_len,inter_id,inter_data)
+                self.chx_avp.write("%s\n"%(new_inter_cmd))
+                continue
+            self.chx_avp.write("%s\n"%(key))
+            #info(key)
 ###########################################Main############################################
 avp = Avp(sys.argv[1:])
 avp.Parse_avp()
